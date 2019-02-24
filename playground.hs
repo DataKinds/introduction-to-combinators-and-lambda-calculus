@@ -1,13 +1,47 @@
 {-# LANGUAGE DataKinds #-}
 
 import Data.Function
-import Data.Set
+import qualified Data.Set as S
+import Data.Char
+import Data.Void
+import Text.Megaparsec
+import Text.Megaparsec.Char
 
 -- DEFINITION 1.1
 data Term =
   Var String |
   Appl Term Term |
   Abst String Term deriving (Eq)
+
+type Parser = Parsec Void String
+
+readTermIO :: String -> IO (Maybe Term)
+readTermIO t = case parse parseTerm "readTermIO" t of
+  Left bundle -> putStrLn (errorBundlePretty bundle) >> return Nothing
+  Right term -> return (Just term)
+
+parseTerm :: Parser Term
+parseTerm = try parseAbst <|> try parseAppl <|> try parseVar
+
+parseAbst :: Parser Term
+parseAbst = do
+  _ <- satisfy (\c -> c == 'λ' || c == '\\')
+  (Var v) <- parseVar
+  _ <- char '.'
+  body <- try parseAppl <|> try parseVar
+  return $ Abst v body
+      
+parseAppl :: Parser Term
+parseAppl = do
+  first <- try parseAbst <|> try parseVar
+  second <- try parseAbst <|> try parseVar
+  return $ Appl first second
+    
+parseVar :: Parser Term
+parseVar = do
+  base <- satisfy isAlpha
+  primes <- Text.Megaparsec.many (char '\'')
+  return $ Var (base:primes)
 
 instance Show Term where
   show (Var v) = v
@@ -35,14 +69,14 @@ q `contains` p =
 -- DEFINITION 1.10: the FREE VARIABLES of term P
 -- intuitively, the FREE VARIABLES are all un-bound variables
 -- a variable x is BOUND in P iff P is of the form λx.M
-fv :: Term -> Set String
-fv p = fv' p empty
+fv :: Term -> S.Set String
+fv p = fv' p S.empty
   where
-    fv' :: Term -> Set String -> Set String
-    fv' (Var v) bound = if v `member` bound then empty else singleton v
+    fv' :: Term -> S.Set String -> S.Set String
+    fv' (Var v) bound = if v `S.member` bound then S.empty else S.singleton v
     --fv' (Appl p1 p2) bound = (union `on` (flip fv' $ bound)) p1 p2
-    fv' (Appl p1 p2) bound = union <$> fv' p1 <*> fv' p2 $ bound
-    fv' (Abst v p) bound = fv' p (insert v bound)
+    fv' (Appl p1 p2) bound = S.union <$> fv' p1 <*> fv' p2 $ bound
+    fv' (Abst v p) bound = fv' p (S.insert v bound)
 
 -- DEFINITION 1.11: SUBSTITUTION
 -- [N/x]M is substituting N for every free occurence of x in M
@@ -55,13 +89,13 @@ substitute n x (Appl p q) =
   (Appl `on` substitute n x) p q               -- (c)
 substitute n x (Abst y p) 
   | y == x = Abst y p                          -- (d)
-  | y `notMember` (fv n) || x `notMember` (fv p) =
+  | y `S.notMember` (fv n) || x `S.notMember` (fv p) =
     Abst y (substitute n x p)                  -- (e)
   | otherwise =
     Abst z (substitute n x $ substitute (Var z) y p) -- (f)
     where
-      takenVarNames = (fv n) `union` (fv p)
-      z = head $ dropWhile (`member` takenVarNames) (iterate (++"'") y)
+      takenVarNames = (fv n) `S.union` (fv p)
+      z = head $ dropWhile (`S.member` takenVarNames) (iterate (++"'") y)
 
 -- DEFINITION 1.22: BETA-REDUCTION
 -- (λx.M)N -> [N/x]M
