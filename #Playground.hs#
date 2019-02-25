@@ -1,53 +1,11 @@
 {-# LANGUAGE DataKinds #-}
 
+module Playground where
+
 import Data.Function
 import qualified Data.Set as S
-import Data.Char
-import Data.Void
-import Text.Megaparsec
-import Text.Megaparsec.Char
-
--- DEFINITION 1.1
-data Term =
-  Var String |
-  Appl Term Term |
-  Abst String Term deriving (Eq)
-
-type Parser = Parsec Void String
-
-readTermIO :: String -> IO (Maybe Term)
-readTermIO t = case parse parseTerm "readTermIO" t of
-  Left bundle -> putStrLn (errorBundlePretty bundle) >> return Nothing
-  Right term -> return (Just term)
-
-parseTerm :: Parser Term
-parseTerm = try parseAbst <|> try parseAppl <|> try parseVar
-
-parseAbst :: Parser Term
-parseAbst = do
-  _ <- satisfy (\c -> c == 'λ' || c == '\\')
-  (Var v) <- parseVar
-  _ <- char '.'
-  body <- try parseAppl <|> try parseVar
-  return $ Abst v body
-      
-parseAppl :: Parser Term
-parseAppl = do
-  first <- try parseAbst <|> try parseVar
-  second <- try parseAbst <|> try parseVar
-  return $ Appl first second
-    
-parseVar :: Parser Term
-parseVar = do
-  base <- satisfy isAlpha
-  primes <- Text.Megaparsec.many (char '\'')
-  return $ Var (base:primes)
-
-instance Show Term where
-  show (Var v) = v
-  show (Appl t1 (Appl t2 t3)) = show t1 ++ "(" ++ show t2 ++ show t3 ++ ")"
-  show (Appl t1 t2) = show t1 ++ show t2
-  show (Abst v t) = "(λ" ++ v ++ "." ++ show t ++ ")"
+import LCParser
+import LCTerm
 
 p_example = Appl (Appl (Abst "y" (Appl (Appl (Var "y") (Var "x")) (Abst "x" (Appl (Appl (Var "y") (Abst "y" (Var "z"))) (Var "x"))))) (Var "v")) (Var "w")
 
