@@ -1,4 +1,0 @@
-{-# LANGUAGE DataKinds #-}
-
-data Term =
-  Var 
